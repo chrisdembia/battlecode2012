@@ -1,0 +1,290 @@
+package team003.controller;
+
+import team003.util.Youtil;
+import team003.util.RobotFilter.is;
+import team003.actions.Fighter;
+import battlecode.common.Clock;
+import battlecode.common.GameActionException;
+import battlecode.common.MapLocation;
+import battlecode.common.RobotController;
+import battlecode.common.RobotInfo;
+import battlecode.common.RobotLevel;
+import battlecode.common.RobotType;
+
+public class Soldier extends Brain {
+
+  private final Fighter actor;
+
+  private boolean inBattleGroup;
+  private int archonTooFar = 2;
+  float fleeRatio = 1f;
+
+  public Soldier(RobotController rc) {
+    super(rc);
+    this.actor = new Fighter(rc, sensor, pathfinder);
+    archonTooClose = 2;
+  }
+
+  @Override
+  public void takeOneTurn() throws GameActionException {
+
+    decideStrategy();
+
+    /**
+     * Strategy SPRINT // TODO create decideStrategy(), etc.
+     *    1. Move toward closest capturable power node.
+     *    2. Attack in place.
+     *    
+     *    (getting flux is done passively)
+     */   
+    switch (strategy) {
+    case OFFENSIVE:
+      actor.tryFluxTransfer(20);
+      if (chaseAndAttackPrioritized()) {return;}
+      if (stayWithArchon()) {return;}
+
+      /*     if (takeTurnDefendNode()) { rc.setIndicatorString(1, "3: Defending adjacent node");return; }
+     if (takeTurnAttack()) { rc.setIndicatorString(1, "1: Attacking"); return; }
+     //if (takeTurnRunToDefenders()) { rc.setIndicatorString(1, "Defending self"); return; }
+     if (takeTurnDefendingSelf()) { rc.setIndicatorString(1, "Defending self"); return; }
+     if (actor.takeTurnMoveToClosestCapturableNode()) { rc.setIndicatorString(1, "2: Moving to closest node"); return; }
+     break;
+       */
+      break;
+    case DEFENSIVE:
+      actor.tryFluxTransfer(20);
+      if (takeTurnAttack()) { rc.setIndicatorString(1, "1: Attacking"); return; }
+      if (attackingCommanded()) { rc.setIndicatorString(1, "rotating attack commanded"); return;}
+      if (takeTurnRunToDefenders()) { rc.setIndicatorString(1, "2: Defending self"); return; }
+      //if (takeTurnDefendingSelf()) { rc.setIndicatorString(1, "Defending self"); return; }
+      if (takeTurnMoveToClosestAlliedArchon()) { rc.setIndicatorString(1, "3: Moving to closest allied archon"); return; }
+      if (takeTurnDefendNode()) { rc.setIndicatorString(1, "4: Defending adjacent node");return; }
+      break;
+
+    case BATTLEGROUP:
+      actor.fireAtWill();  
+      actor.tryFluxTransfer(20);      
+      //if (actor.rotateTowardsEnemies()) { rc.setIndicatorString(1, "1: rotate towards enemy"); return; }     
+      if (goingToCommanded()) { rc.setIndicatorString(1, "moving to command location"); return; }
+      if (turningToCommanded()) { rc.setIndicatorString(1, "rotating to command direction"); return; }
+      if (attackingCommanded()) { rc.setIndicatorString(1, "rotating attack commanded"); return;}
+      break;
+    default:
+      return;
+    }
+  }
+
+
+
+  public void decideStrategy() throws GameActionException {
+    // TODO need a way to release soldiers from the battlegroup as well.
+    if (inBattleGroup) {
+      strategy = Strategy.BATTLEGROUP;
+      return;
+    }
+    if (inBox.commandLocation != null) {
+      inBattleGroup = true;
+      strategy = Strategy.BATTLEGROUP;
+    } else {
+      strategy = Strategy.OFFENSIVE;   
+
+    }
+  }
+
+  /**
+   * Scott's doing.
+   * @return
+   * @throws GameActionException
+   */
+  private boolean takeTurnAttack() throws GameActionException {
+    //rc.setIndicatorString(0, Float.toString(sensor.getAllyToEnemyRatio()));
+    if (sensor.getAllyToEnemyRatio() < fleeRatio) {
+      return attackPrioritized();
+    }
+    return false;
+    //System.out.println("enemy ally ratio switch" + rc.getLocation().toString() + sensor.getAllyToEnemyRatio());
+    //return false;
+  }
+
+  private boolean stayWithArchon() throws GameActionException {
+    if (rc.isMovementActive()) return false;
+    if (sensor.getClosestAlliedArchon().distanceSquaredTo(rc.getLocation()) > archonTooFar*archonTooFar) {
+      return actor.moveTo(sensor.getClosestAlliedArchon());
+    }
+    return false;
+  }
+
+  /**
+   *  Attacks enemies with the priority: attack archons, closest nontowers, then towers.
+   *  
+   *  TODO this could also be broken down into 3 attack methods to be individually called
+   *  by Soldier. So is this code not useable by fighters other than Soliders?
+   *  TODO I think this should be moved to Soldier eventually.
+   * @return
+   * @throws GameActionException
+   */
+  public boolean attackPrioritized() throws GameActionException {
+    //attacks enemy fighters if they are around, only attacks towers if there are no other enemies
+
+    if (!sensor.existNearbyEnemies()) { return false; }
+
+    rc.setIndicatorString(2, "nearby enemies exist");
+    if (sensor.existNearbyEnemyArchons()) {
+      actor.faceAndAttack(sensor.getLowestEnergonRobot(sensor.getNearbyEnemyArchons()));
+      return true;
+    }
+
+    if (inBox.numEnemyArchons > 0) {
+      return actor.faceAndAttack(inBox.enemyArchons[0]);
+    }
+
+    rc.setIndicatorString(2, "no nearby enemy archons");
+    if (sensor.existNearbyEnemyNonTowers()) {
+      return actor.faceAndAttack(sensor.getLowestEnergonRobot(sensor.getNearbyEnemyNonTowers()));
+    }
+
+    if (inBox.numEnemyFighters > 0) {
+      return actor.faceAndAttack(inBox.enemyFighters[0]);
+    }
+
+    rc.setIndicatorString(2, "no nearby enemy nontowers");
+    if (sensor.getNearbyEnemyTowers() != null) {
+      rc.setIndicatorString(2, "there is an enemy tower");
+      actor.fireAtWill();
+      //chaseAndAttack(sensor.getClosestRobot(sensor.getNearbyEnemies()));
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   *  Attacks enemies with the priority: attack archons, closest nontowers, then towers.
+   *  
+   *  TODO this could also be broken down into 3 attack methods to be individually called
+   *  by Soldier. So is this code not useable by fighters other than Soliders?
+   *  TODO I think this should be moved to Soldier eventually.
+   * @return
+   * @throws GameActionException
+   */
+  public boolean chaseAndAttackPrioritized() throws GameActionException {
+    //attacks enemy fighters if they are around, only attacks towers if there are no other enemies
+
+    if (!sensor.existNearbyEnemies()) { return false; }
+
+    rc.setIndicatorString(2, "nearby enemies exist");
+    if (sensor.existNearbyEnemyArchons()) {
+      return actor.chaseAndAttack(sensor.getClosestRobot(sensor.getNearbyEnemyArchons()));
+    }
+
+    if (inBox.numEnemyArchons > 0) {
+      return actor.chaseAndAttack(inBox.enemyArchons[0]);
+    }
+
+    rc.setIndicatorString(2, "no nearby enemy archons");
+    if (sensor.existNearbyEnemyNonTowers()) {   
+      return actor.chaseAndAttack(sensor.getClosestRobot(sensor.getNearbyEnemyNonTowers()));
+    }
+
+    if (inBox.numEnemyFighters > 0) {
+      return actor.chaseAndAttack(inBox.enemyFighters[0]);
+    }
+
+    rc.setIndicatorString(2, "no nearby enemy nontowers");
+    if (sensor.getNearbyEnemyTowers() != null) {
+      rc.setIndicatorString(2, "there is an enemy tower");
+      return actor.chaseAndAttackFirst();
+    }
+    return false;
+  }
+
+  /**
+   * TODO if we introduce code in sensor that checks messages for who's nearby then this
+   * will need to be modified. The idea is that this action does not get triggered if
+   * your health goes down you can sense an enemy.
+   * @return
+   * @throws GameActionException
+   */
+  private boolean takeTurnDefendingSelf() throws GameActionException {
+    if (sensor.attackedRecently() && !(sensor.existNearbyEnemyFighters())) {
+      //!(RobotFilter.filter(nearbyRobots, new isNot(RobotType.ARCHON, rc.getTeam())).length == 0)) {
+      //rc.setIndicatorString(1, "Attacked from behind");
+      //System.out.println("Attacked from behind" + rc.getLocation());
+      return actor.rotatingAttack();
+    }
+    return false;
+  }
+
+  /**
+   * This is the other option if we're not doing takeTurnDefendingSelf(). Scott had this one.
+   * @return
+   * @throws GameActionException
+   */
+  private boolean takeTurnRunToDefenders() throws GameActionException {
+    if (sensor.attackedRecently() && !sensor.existNearbyEnemyFighters()) {
+      //rc.setIndicatorString(1, "Attacked from behind");
+      //System.out.println("Attacked from behind" + rc.getLocation());
+      RobotInfo[] soldiers = sensor.filterNearbyRobots(new is(RobotType.SOLDIER, rc.getTeam()));
+      if (sensor.existRobots(soldiers)) {
+        rc.setIndicatorString(2, "Defending myself - run to soldier");
+        return actor.moveBackTo(sensor.getClosestRobot(soldiers));
+      }
+
+      return actor.moveBackTo(sensor.getClosestAlliedArchon());
+    }
+    return false;
+  }
+
+  /**
+   * Defend node by rotating until seeing an enemy.
+   * @return
+   * @throws GameActionException
+   */
+  private boolean takeTurnDefendNode() throws GameActionException {
+    return actor.rotatingAttack(5);
+  }
+
+
+
+  /**
+   * Moves to closest allied archon.
+   * @return
+   * @throws GameActionException
+   */
+  private boolean takeTurnMoveToClosestAlliedArchon() throws GameActionException {
+    //rc.setIndicatorString(1, Integer.toString(rc.getLocation().distanceSquaredTo(closestCapturableNode)));
+    if (Youtil.manhattanDist(rc.getLocation(), sensor.getClosestAlliedArchon()) <= 2) {
+
+      // Soldiers were preventing archons from getting to towers, so this
+      //tries to make them make a hole for the archons. It's mildly successful
+      //if (fleeNearbyAlliedArchon()) {return true;}
+      return false;
+    }
+    return actor.moveNear(sensor.getClosestAlliedArchon());      
+  }
+
+
+
+  //BATTLEGROUP METHODS::
+
+  public boolean goingToCommanded() throws GameActionException {
+    return inBox.commandLocation != null 
+        && actor.moveTo(inBox.commandLocation); 
+  }
+
+  public boolean turningToCommanded() throws GameActionException {
+    return inBox.commandDirection != null 
+        && actor.setDirection(inBox.commandDirection);
+  }
+
+  public boolean attackingCommanded() throws GameActionException {
+    if (inBox.numEnemyFighters > 0) {
+      MapLocation closestEnemy = inBox.enemyFighterLocations[Youtil.indexOfMin(rc.getLocation(), inBox.enemyFighterLocations)];
+      if (rc.getLocation().distanceSquaredTo(closestEnemy) <= rc.getType().attackRadiusMaxSquared) {
+        // only start spinning if the enemy is within attack radius.
+        return actor.rotatingAttack();
+      }
+    }
+    return false;
+  }
+}
+

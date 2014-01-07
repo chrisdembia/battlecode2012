@@ -1,0 +1,198 @@
+package team140.actions;
+
+import team140.util.Timer;
+import team140.util.Youtil;
+import team140.model.Sensor;
+import team140.pathfinder.Pathfinder;
+import battlecode.common.Direction;
+import battlecode.common.GameActionException;
+import battlecode.common.MapLocation;
+import battlecode.common.RobotController;
+import battlecode.common.RobotInfo;
+import battlecode.common.RobotLevel;
+
+public class Fighter extends Fluxer {
+
+  Timer sentryTimer = new Timer();
+  
+  public Fighter(RobotController rc, Sensor sensor, Pathfinder pathfinder) {
+    super(rc, sensor, pathfinder);
+    // TODO Auto-generated constructor stub
+  }
+
+  // TODO attack scouts method!
+  // TODO fleeAndAttack method, using moving backwards
+  
+  /**
+   * Basic attack method.
+   */
+  public boolean fireAt(RobotInfo enemy) throws GameActionException {    //System.out.println(!rc.canAttackSquare(enemy.location));
+    if (enemy == null || !rc.canAttackSquare(enemy.location)) { 
+      
+      return false; 
+    } 
+    if (!rc.isAttackActive()) {       
+      rc.attackSquare(enemy.location, enemy.robot.getRobotLevel());
+    }
+    return true;
+  }
+  
+  /**
+   * Basic attack method.
+   */
+  public boolean fireAt(MapLocation location, RobotLevel level) throws GameActionException {
+    if (!rc.canAttackSquare(location)) { 
+      return false; 
+    } 
+    if (!rc.isAttackActive()) {       
+      rc.attackSquare(location, level);
+    }
+    return true;
+  }
+  
+  /**
+   * Second-level attack method.
+   * @return
+   * @throws GameActionException
+   */
+  public boolean fireAtWill() throws GameActionException {  
+    return sensor.existNearbyEnemies() && fireAt(sensor.getNearbyEnemies()[0]);
+  }
+  
+  public boolean fireAtGroundEnemies() throws GameActionException {
+    return sensor.existNearbyGroundEnemies() && fireAt(sensor.getNearbyGroundEnemies()[0]);
+  }
+  
+  /**
+   * Rotates and looks for enemies to attack. Uses a timer.
+   * @param delay
+   * @return
+   * @throws GameActionException
+   */
+  public boolean rotatingAttack(int delay) throws GameActionException {
+    //filter
+    if (!sensor.existNearbyEnemies()) { 
+      if (!sentryTimer.isSet()) {
+        sentryTimer.set(); 
+      } else if (sentryTimer.check(delay) && tryRotateLeft()) {
+        sentryTimer.reset();
+      }
+      return false;
+    }
+    return faceAndAttackFirst();       
+  }
+
+  /**
+   * Rotates and looks for enemies to attack, very wasteful speed of rotation.
+   * @return
+   * @throws GameActionException
+   */
+  public boolean rotatingAttack() throws GameActionException {
+    //filter
+    if (!sensor.existNearbyEnemies()) { 
+      tryRotateLeft();
+    }
+    return faceAndAttackFirst();       
+  }
+    
+  /**
+   * Attacks and pursues first nearby robot
+   * @return
+   * @throws GameActionException
+   * 
+   *  TODO use Sensor methods
+   */
+  public boolean chaseAndAttackFirst() throws GameActionException {  
+    if (!sensor.existNearbyEnemies()) { return false; }
+    if(!fireAt(sensor.getNearbyEnemies()[0]) && !rc.canAttackSquare(sensor.getNearbyEnemies()[0].location)) {
+      rc.setIndicatorString(2, "kk moving");
+      moveTo(sensor.getNearbyEnemies()[0]);
+      return true;
+    }
+    return true;
+  }
+  
+  public boolean chaseAndAttack(RobotInfo enemy) throws GameActionException {
+<<<<<<< HEAD
+/*    if (enemy == null) {
+    	return false;
+    }
+  	if(!rc.canAttackSquare(enemy.location)) {
+=======
+    if(!rc.canAttackSquare(enemy.location)) {
+>>>>>>> 06cbda32ea24e13b52878eb0f81f8531f6d9cc9a
+      moveTo(enemy);
+    }
+    return fireAt(enemy);
+    */
+    if (!fireAt(enemy)) {
+      moveTo(enemy);
+    }
+    return true;
+  }
+  
+  public boolean chaseAndAttack(MapLocation location) throws GameActionException {
+    if (!fireAt(location, RobotLevel.ON_GROUND)) {
+      moveTo(location);
+    }
+    return true;
+  }
+  
+  public boolean faceAndAttackFirst() throws GameActionException {  
+    if (!sensor.existNearbyEnemies()) { return false; }
+    if(!fireAt(sensor.getNearbyEnemies()[0])) {
+      rc.setIndicatorString(2, "kk moving");
+      setDirection(rc.getLocation().directionTo(sensor.getNearbyEnemies()[0].location));
+      return true;
+    }
+    return true;
+  }
+  
+  public boolean faceAndAttack(RobotInfo enemy) throws GameActionException {
+    if(!fireAt(enemy)) {
+      if (enemy != null) {
+      setDirection(rc.getLocation().directionTo(enemy.location));
+      } else {
+        return false;
+       // rotatingAttack();
+      }
+    }
+    return true;
+  }
+  
+  public boolean faceAndAttack(MapLocation location) throws GameActionException {
+    if(!fireAt(location, RobotLevel.ON_GROUND)) {
+      setDirection(rc.getLocation().directionTo(location));
+    }
+    return true;
+  }
+  
+  /**
+   * TODO Implemented!
+   * @return
+   * @throws GameActionException
+   */
+  public boolean chaseAndAttackWeakest() throws GameActionException {  
+
+    // TODO make this actually work
+    //return chase(new wounded(rc.getTeam(), 0.95));
+    if (!sensor.existNearbyEnemyNonTowers()) { return false; }
+
+    if(!fireAt(sensor.getNearbyWeakestNonTower())) {
+      moveTo(sensor.getNearbyWeakestNonTower());
+      return true;
+    }
+    return true;
+  }
+
+  /**
+   * rotate in place to face towards any enemies
+   */
+  public boolean rotateTowardsEnemies() throws GameActionException {
+    
+    if (!sensor.existNearbyEnemies() || rc.isMovementActive()) return false;
+
+    rc.setDirection( Youtil.straightDirectionBetween(rc.getLocation(), sensor.getNearbyEnemies()[0].location) );
+    return true;
+  }
+}

@@ -1,0 +1,255 @@
+package team003.model;
+
+import team003.model.Messages.MessageType;
+import team003.util.Youtil;
+import battlecode.common.Direction;
+import battlecode.common.MapLocation;
+import battlecode.common.Message;
+import battlecode.common.RobotController;
+import battlecode.common.RobotType;
+
+public class IncomingQueue extends Messages {
+
+  public String [] broadcasts; //TODO Change to strategy when up and running
+  private int numBroadcastMessages;
+  private int numRobotLocationMessages;
+  private int numEnemyFighterLocationMessages;
+  private int numEnemyArchonLocationMessages;
+  private int numFocusFireMessages;
+  private int voidMessages;
+  private int locPosCommands;
+
+  private int broadcastIndex;
+  private int enemyArchonLocationIndex;
+  private int robotLocationIndex;
+  private int enemyFighterLocationIndex;
+  private int focusFireIndex;
+  private int voidIndex;
+  private int locPosCommandIndex;
+
+  public MapLocation[] robotLocations;
+  public MapLocation[] enemyFighterLocations;
+  public MapLocation[] enemyArchonLocations;
+  public MapLocation[] focusFireLocations;
+  public MapLocation[] voidLocations;
+  public MapLocation[] commandLocations = null;
+  public Direction[] commandDirections = null;
+
+  public MapLocation tempLocation;
+
+  public IncomingQueue(RobotController myrc) {
+    super(myrc);
+
+  }
+
+  /**
+   * Called at the beginning of each round for each robot
+   */
+  public void GetTurnsMessages() {
+
+    Message[] incoming = rc.getAllMessages();
+
+    if (incoming.length == 0) return; 
+
+    int numGameMessages = 0;    
+    numBroadcastMessages = 0;
+    numRobotLocationMessages = 0;
+    numEnemyFighterLocationMessages = 0;
+    numEnemyArchonLocationMessages = 0;
+    numFocusFireMessages = 0;
+    voidMessages = 0;
+    locPosCommands = 0;
+
+    // count the number of messages first.
+    for (int i = 0; i < incoming.length; i++) {
+
+      if (incoming[i].strings != null && incoming[i].strings.length > 0
+          && decrypt(incoming[i].strings[0])) {
+
+        numGameMessages++;
+
+        for (int j = numMetaStrings; j < incoming[i].strings.length; j++) {
+
+          switch (Messages.getMessageType(incoming[i].strings[j].charAt(0))) {
+          case BROADCAST:
+            numBroadcastMessages++;
+            break;
+          case ROBOT_LOCATION:
+            numRobotLocationMessages++;
+            break;
+          case ENEMY_FIGHTER_LOCATION:
+            numEnemyFighterLocationMessages++;
+            break;
+          case ENEMY_ARCHON_LOCATION:
+            numEnemyArchonLocationMessages++;
+            break;
+          case FOCUS_FIRE:
+            numFocusFireMessages++;
+            break;
+          case VOID_LOCATION:
+            voidMessages++;
+            break;
+          case LOC_AND_DIR_COMMAND:
+            locPosCommands++;
+            break;
+          }
+        }
+      }
+      
+    }
+
+    // Pull robot sender information
+    //RobotType[] senderType = new RobotType[numGameMessages];
+    //int[] senderID = new int[numGameMessages];
+
+    // use number information to specify the size of our message data.
+    broadcasts = new String[numBroadcastMessages];
+    robotLocations = new MapLocation[numRobotLocationMessages];
+    enemyFighterLocations = new MapLocation[numEnemyFighterLocationMessages];
+    enemyArchonLocations = new MapLocation[numEnemyArchonLocationMessages];
+    focusFireLocations = new MapLocation[numFocusFireMessages];
+    voidLocations = new MapLocation[voidMessages];
+    commandLocations = new MapLocation[locPosCommands];
+    commandDirections = new Direction[locPosCommands];
+    
+
+    broadcastIndex = 0;
+    robotLocationIndex = 0;
+    enemyFighterLocationIndex = 0;
+    enemyArchonLocationIndex = 0;
+    focusFireIndex = 0;
+    voidIndex = 0;
+    locPosCommandIndex = 0;
+
+    // decompose messages
+    for (int i = 0; i < incoming.length; i++) {
+      // validate ours and validate turn
+      if (   incoming[i].strings != null 
+          && incoming[i].strings.length > 0
+          && decrypt(incoming[i].strings[0]) ) {
+
+          // Get address and sender ID and sender type information here.
+
+          for (int j = numMetaStrings; j < incoming[i].strings.length; j++) {
+            MessageType type = Messages.getMessageType(incoming[i].strings[j].charAt(0));
+            if (type != MessageType.UNKNOWN) {
+              decomposeString(type, incoming[i].strings[j]);
+            }
+          }
+        }
+    }
+
+    // TODO resize arrays because of uniqueness issue.
+    // TODO can I assign to myself here?
+    robotLocations = java.util.Arrays.copyOf(robotLocations, robotLocationIndex);
+    enemyFighterLocations = java.util.Arrays.copyOf(enemyFighterLocations, enemyFighterLocationIndex);
+    enemyArchonLocations = java.util.Arrays.copyOf(enemyArchonLocations, enemyArchonLocationIndex);
+    focusFireLocations = java.util.Arrays.copyOf(focusFireLocations, focusFireIndex);
+    voidLocations = java.util.Arrays.copyOf(voidLocations, voidIndex);
+    commandLocations = java.util.Arrays.copyOf(commandLocations, locPosCommandIndex);
+    commandDirections = java.util.Arrays.copyOf(commandDirections, locPosCommandIndex);
+
+//    debug();
+  }
+
+  /**
+   * 
+   */
+  public void debug() {
+/*    if (enemyFighterLocations.length != 0) {
+      System.out.println("Printing out enemy fighter locations: ");
+      for (int i = 0; i < enemyFighterLocations.length; i++) {
+        System.out.println(enemyFighterLocations[i].toString());
+      }
+    }
+    if (enemyArchonLocations.length != 0) {
+      System.out.println("Printing out enemy archon locations: ");
+      for (int i = 0; i < enemyArchonLocations.length; i++) {
+        System.out.println(enemyArchonLocations[i].toString());
+      }
+    }
+    if (voidLocations.length != 0) {
+      System.out.println("Printing out void locations: ");
+      for (int i = 0; i < voidLocations.length; i++) {
+        System.out.println(voidLocations[i].toString());
+      }
+    }*/
+    if (commandLocations.length != 0) {
+      System.out.println("Printing out locDirCommands");
+      for (int i = 0; i < commandLocations.length; i++) {
+        if (commandLocations[i] != null) {
+          System.out.println(commandLocations[i].toString() + " and " + 
+          commandDirections[i].toString());
+        } else {
+          System.out.println("commandLocations is null");
+          
+        }
+      }
+    }
+    
+  }
+
+  public void decomposeString(MessageType type, String str) {
+    switch (type) {
+    case BROADCAST:
+      // TODO
+      broadcastIndex++;
+      break;
+    case ROBOT_LOCATION:
+      tempLocation = String2MapLocation(str);
+      if (tempLocation != null && Youtil.isUniqueLocation(robotLocations, tempLocation)) {
+        robotLocations[robotLocationIndex] = tempLocation;
+        robotLocationIndex++;
+      }
+      break;
+    case ENEMY_FIGHTER_LOCATION:
+      tempLocation = String2MapLocation(str);
+      if (tempLocation != null && Youtil.isUniqueLocation(enemyFighterLocations, tempLocation)) {
+        enemyFighterLocations[enemyFighterLocationIndex] = tempLocation;
+        enemyFighterLocationIndex++;
+      }
+      break;
+    case ENEMY_ARCHON_LOCATION:
+      tempLocation = String2MapLocation(str);
+      if (tempLocation != null && Youtil.isUniqueLocation(enemyArchonLocations, tempLocation)) {
+        enemyArchonLocations[enemyArchonLocationIndex] = tempLocation;
+        enemyArchonLocationIndex++;
+      }
+      break;
+    case FOCUS_FIRE:
+      tempLocation = String2MapLocation(str);
+      if (tempLocation != null && Youtil.isUniqueLocation(focusFireLocations, tempLocation)) {
+        focusFireLocations[focusFireIndex] = tempLocation;
+        focusFireIndex++;
+      }
+      break;
+    case VOID_LOCATION:
+      tempLocation = String2MapLocation(str);
+      if (tempLocation != null && Youtil.isUniqueLocation(voidLocations, tempLocation)) {
+        voidLocations[voidIndex] = tempLocation;
+        voidIndex++;
+      }
+      break;
+    case LOC_AND_DIR_COMMAND:
+      tempLocation = String2MapLocation(str);
+<<<<<<< HEAD
+      System.out.println("new");
+      System.out.println(str);
+      System.out.println(Integer.toString(String2RobotID(str)));
+      System.out.println(tempLocation.toString());
+      if (rc.getRobot().getID() == String2RobotID(str)
+=======
+      if (tempLocation != null && rc.getRobot().getID() == String2RobotID(str)
+>>>>>>> ca80e60f3e46441799cd703d2fce4de6ebaecd59
+          && Youtil.isUniqueLocation(commandLocations, tempLocation)) {
+        commandLocations[locPosCommandIndex] = tempLocation;
+        commandDirections[locPosCommandIndex] = String2Direction(str);
+        locPosCommandIndex++;
+      }
+      break;
+    default:
+      System.out.println("Warning: cannot decompose str: " + str);
+    }
+  }
+
+}
